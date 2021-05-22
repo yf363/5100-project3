@@ -1,0 +1,300 @@
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.14.2/styles/default.min.css">
+    
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+
+   
+    <script src=https://www.pluralsight.com/guides/create-tooltips-in-d3js></script>
+    <script src=https://ourworldindata.org/female-labor-supply></script>
+    <script src=https://www.d3-graph-gallery.com/graph/interactivity_button.html#:~:text=1%20Trigger%20function%20in%20html%20with%20onclick%20%28%29.,an%20update%20function%20that%20also%20update%20an%20axis.></script>
+</head>
+<style>
+
+    .countries {
+        /*stroke: white;*/
+        /*stroke-width: 1px;*/
+        /*fill: none;*/
+        fill: #ddd;
+    }
+
+    .outline {
+        stroke: #fff;
+        stroke-width: 1px;
+        fill: none;
+    }
+
+    .mouseover {
+        stroke: #000000;
+        stroke-width: 3px;
+        pointer-events: none;
+    }
+    body {
+        background-color: rgb(244, 245, 248);
+        margin-left: 6%;
+        margin-right: 6%;
+        overflow:hidden;
+    }
+
+    #globe {
+        background: rgb(164, 188, 240);
+    }
+    .tooltip {
+        font: bold 25px Verdana;
+        /*font-family: simsun;*/
+        font-size: 12px;
+        width: 120px;
+        height: auto;
+        color: #555;
+        position: absolute;
+        text-align: left;
+        border-style: solid;
+        border-width: 2px;
+        background-color: white;
+        border-radius: 5px;
+    }
+    #map-chart{
+        text-align:center;
+    }
+</style>
+<body>
+    <div id="map-chart">
+        <svg id="globe" height="620" width="1000"></svg>
+    </div>
+    
+
+    <script>
+        const svg1 = d3.select("svg#globe");
+        const legendSVG1 = d3.select("svg#legendsvg");
+        const width1 = svg1.attr("width");
+        const height1 = svg1.attr("height");
+        const margin = { "top": 10, "right": 10, "bottom": 100, "left": 0 };
+        const mapwidth1 = width1 - margin.left - margin.right;
+        const mapheight1 = height1 - margin.top - margin.bottom;
+        const map1 = svg1.append("g")
+            .attr("transform", "translate(" + (margin.left) + "," + (margin.top) + ")");
+        
+        var btnWidth = 100;
+        var btnHeight = 20;
+        var btnLeft = (width1 - margin.left - (btnWidth + 10) * 3) / 2;
+        var btnBox = svg1.append("g")
+            .attr("transform", "translate(" + btnLeft + "," + (height1 - 60) + ")");
+        var btnComputeColor = d3.interpolate(
+            d3.rgb(249,251,132),
+            d3.rgb(166,169,6));
+        var btnColor = d3.scaleOrdinal(d3.schemeCategory10);
+
+        var countries1;
+        var countriesMesh1;
+        var projection1;
+        var path1;
+        var countryNameDic1;
+        var countrydata1;
+        var Freedom_visualization = {};
+        var currentYear = 2017;
+        var yaxisName = "Country/Territory";
+        var xaxisName = "Total";
+        var max = 0;
+        var defaultStroke = "#FFF";
+
+        var FreedomPressV5 = {};
+        var projection1 = d3.geoMercator().scale(130).translate([480, 420]).center([0,0]);
+        var path1 = d3.geoPath().projection(projection1);
+
+        var computeColor1 = d3.interpolate(d3.rgb(230, 242, 255),d3.rgb(81,133,163));
+        var computeColor2 = d3.interpolate(d3.rgb(31,161,171),d3.rgb(1,108,89));
+        var colorLinear1 = d3.scaleLinear().range([0, 1]);
+        var colorLinear2 = d3.scaleLinear().range([0, 1]);
+        var color = function (value) {
+            if (value <= max / 2) {
+                return computeColor1(colorLinear1(value));
+            }
+            return computeColor2(colorLinear2(value));
+        };
+       
+    //Define a pop-up prompt box, which is used to display related messages when the mouse is over
+        
+        var tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0.0);
+
+        // Generate the content of the pop-up prompt box
+        function tooltipContent(list, title) {
+            var tpl = "<div style='margin-top:5px;'><span>"
+            tpl += "{name}: </span>{value}</div>";
+            var html = "<div style='padding-left:20px;padding-right: 20px;padding-bottom:10px;font-size:12px;'>";
+            html += "<h2>" + title + "</h2>"
+            list.forEach(function (dataItem) {
+                name = dataItem.name, value = dataItem.value;
+                html += tpl.replace("{name}", name).replace("{value}", value);
+            });
+            html += "</div>";
+            return html;
+        }
+
+        function drawMapChart(countrydata1) {
+            console.log(countrydata1);
+            countries = topojson.feature(countrydata1, countrydata1.objects.countries);
+
+            max = d3.max(Freedom_visualization[currentYear], d => d[xaxisName]);
+           colorLinear1.domain([0, max / 2]);
+           colorLinear2.domain([max / 2, max]);
+           
+           
+            var currentObj = {}, statusObj = {};
+            Freedom_visualization[currentYear].forEach(function (item) {
+                var name = item[yaxisName];
+                if (currentObj[name] === undefined) {
+                    currentObj[name] = item;
+                }
+                if (statusObj[item.Status] === undefined) {
+                    statusObj[item.Status] = item.Status;
+                }
+            });
+            console.log(statusObj);
+
+            var btnlist = [];
+            for (var key in statusObj) {
+                var index = 2;
+                if (key === "NF") {
+                    index = 0;
+                }
+                if (key === "PF") {
+                    index = 1;
+                }
+                btnlist.push({ name: key, index: index });
+            }
+            btnlist.sort(function (a, b) { return a.index - b.index; });         
+
+            btnBox.selectAll(".btn")
+                .data(btnlist)
+                .join("rect")
+                .attr("class","btn");
+            btnBox.selectAll(".btn")
+                .attr("x", (d, i) => {
+                    return i * (btnWidth + 10);
+                })
+                .attr("y", 0)
+                .style("stroke-width", 0.5)
+                .attr("width", btnWidth)
+                .attr("height", btnHeight)
+                .style("fill", (d, i) => {
+                    return btnComputeColor(i * 0.3);
+                })
+                .style("cursor","pointer")
+                .on("mouseover", function (evt, d) {
+                    d3.select(this)
+                        .style("stroke", "#000")
+                        .style("stroke-width", 2);
+                    map1.selectAll("path.counties")
+                        .filter(e => {
+                            return e.properties.status !== d.name;
+                        })
+                        .style("fill","#ccc")
+                        .style("opacity", 0.4);
+                })
+                .on("mouseout", function (evt, d) {
+                    d3.select(this)
+                        .style("stroke", btnColor(d.name))
+                        .style("stroke-width", 0.5);
+                    map1.selectAll("path.counties")
+                        .style("fill", e => {
+                            if (!currentObj[e.properties.name]) {
+                                return "#ccc";
+                            }
+                            return color(currentObj[e.properties.name][xaxisName]);
+                        })
+                        .style("opacity", 1);
+                });
+
+            map1.selectAll("path.counties")
+                .data(countries.features)
+                .join("path")
+                .attr("class", "counties");
+
+            map1.selectAll("path.counties")
+                .attr("note", d => d.id)
+                .attr("d", countiesoutline => path1(countiesoutline))
+                .style("fill", d => {
+                    if (currentObj[d.properties.name]) {
+                        d.properties.status = currentObj[d.properties.name].Status;
+                    }
+                    if (!currentObj[d.properties.name]) {
+                        return "#ccc";
+                    }
+                    return color(currentObj[d.properties.name][xaxisName]);})
+                .style("stroke", defaultStroke)
+                .style("stroke-width", 0.5)
+                .on("mousemove", function (evt, d) { 
+                    var value = !currentObj[d.properties.name]?0:currentObj[d.properties.name][xaxisName];
+                    var strhtml = tooltipContent([
+                                                    {name: xaxisName, value: value},
+                                                    {name: "Year", value: currentYear}], d.properties.name);
+
+        //tooltip inoformation
+         tooltip.html(strhtml)
+                        .style("width", "auto")
+                        .style("height", "auto")
+                        .style("left", (event.pageX - 60) + "px")
+                        .style("top", (event.pageY + 20) + "px")
+                        .style("opacity", 1.0);
+            d3.select(this)
+              .style("stroke", "#000")
+              .style("stroke-width", 2);})
+              .on("mouseout", function (evt, d) {
+         // hide tooltip
+                    tooltip.html("");
+                    tooltip.style("width", 0)
+                        .style("height", 0)
+                        .style("opacity", 0.0);
+                    d3.select(this)
+                        .style("stroke", defaultStroke)
+                        .style("stroke-width", 0.5);
+                     });
+
+            btnBox.selectAll(".btn-txt")
+                .data(btnlist)
+                .join("text")
+                .attr("class", "btn-txt");
+            btnBox.selectAll(".btn-txt")
+                .attr("dx", (d, i) => {
+                                        return i * (btnWidth + 10) + (btnWidth - d.name.length * 40)/2;
+                                    })
+                .attr("dy", btnHeight + 20)
+                .text(d => {
+                    if (d.name === "NF") {
+                        return "Not Free";
+                    }
+                    if (d.name === "PF") {
+                        return "Partial Free";
+                    }
+                    return "Free";
+                });
+             }
+
+        d3.json("countries-110m.json").then(function (countrydata1) {
+            d3.csv("freedom_visualization.csv").then(function (ResFreedom_visualization) {
+                ResFreedom_visualization.forEach(function (item) {
+                    item.Total = item.Total * 1;
+                    if (isNaN(item.Total)) {
+                        item.Total = 0;
+                    }
+                    item.Edition = item.Edition * 1;
+                    if (isNaN(item.Edition)) {
+                        item.Edition = 0;
+                    }
+                    if (Freedom_visualization[item.Edition] === undefined) {
+                        Freedom_visualization[item.Edition] = [];
+                    }
+                    Freedom_visualization[item.Edition].push(item);
+                });
+                console.log(Freedom_visualization);
+
+                drawMapChart(countrydata1);
+            });
+        });
+    </script>
